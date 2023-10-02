@@ -15,14 +15,19 @@ def get_channel_values(frame1_filename = 'frame1.txt', frame2_filename = 'frame2
     frame1_str = read_file(frame1_filename)
     frame2_str = read_file(frame2_filename)
     frame1_values = get_decimal_values(frame1_str)
-    channel2_values = frame1_values[:1749]
+    # frame1_values.reverse()
+    channel2_values = frame1_values[:1824]
 
     frame2_values = get_decimal_values(frame2_str)
-    frame2_values.reverse()
-    channel1_values = frame2_values[192:]
-    channel1_tail_values = frame1_values[-149:]
-    channel1_tail_values.reverse()
-    channel1_values = channel1_values + channel1_tail_values
+    # frame2_values.reverse()
+    # channel1_values = frame2_values[192:]
+    channel1_values = frame2_values
+    channel1_tail_values = frame1_values[-32:]
+    # channel1_tail_values.reverse()
+    # channel1_values = channel1_values + channel1_tail_values
+    channel1_values = channel1_tail_values + channel1_values
+    channel1_values.reverse()
+    channel2_values.reverse()
     return {
         "channel1" :{
             "values": channel1_values,
