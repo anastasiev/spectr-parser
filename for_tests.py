@@ -1,68 +1,77 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider, Button
+
+from matplotlib.backend_tools import ToolBase, ToolToggleBase
+
+plt.rcParams['toolbar'] = 'toolmanager'
 
 
-# The parametrized function to be plotted
-def f(t, amplitude, frequency):
-    return amplitude * np.sin(2 * np.pi * frequency * t)
+class ListTools(ToolBase):
+    """List all the tools controlled by the `ToolManager`."""
+    default_keymap = 'm'  # keyboard shortcut
+    description = 'List Tools'
 
-t = np.linspace(0, 1, 1000)
-
-# Define initial parameters
-init_amplitude = 5
-init_frequency = 3
-
-# Create the figure and the line that we will manipulate
-fig, ax = plt.subplots()
-line, = ax.plot(t, f(t, init_amplitude, init_frequency), lw=2)
-ax.set_xlabel('Time [s]')
-
-# adjust the main plot to make room for the sliders
-fig.subplots_adjust(left=0.25, bottom=0.25)
-
-# Make a horizontal slider to control the frequency.
-axfreq = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-freq_slider = Slider(
-    ax=axfreq,
-    label='Frequency [Hz]',
-    valmin=0.1,
-    valmax=30,
-    valinit=init_frequency,
-)
-
-# Make a vertically oriented slider to control the amplitude
-axamp = fig.add_axes([0.1, 0.25, 0.0225, 0.63])
-amp_slider = Slider(
-    ax=axamp,
-    label="Amplitude",
-    valmin=0,
-    valmax=10,
-    valinit=init_amplitude,
-    orientation="vertical"
-)
+    def trigger(self, *args, **kwargs):
+        print('_' * 80)
+        fmt_tool = "{:12} {:45} {}".format
+        print(fmt_tool('Name (id)', 'Tool description', 'Keymap'))
+        print('-' * 80)
+        tools = self.toolmanager.tools
+        for name in sorted(tools):
+            if not tools[name].description:
+                continue
+            keys = ', '.join(sorted(self.toolmanager.get_tool_keymap(name)))
+            print(fmt_tool(name, tools[name].description, keys))
+        print('_' * 80)
+        fmt_active_toggle = "{!s:12} {!s:45}".format
+        print("Active Toggle tools")
+        print(fmt_active_toggle("Group", "Active"))
+        print('-' * 80)
+        for group, active in self.toolmanager.active_toggle.items():
+            print(fmt_active_toggle(group, active))
 
 
-# The function to be called anytime a slider's value changes
-def update(val):
-    line.set_ydata(f(t, amp_slider.val, freq_slider.val))
-    fig.canvas.draw_idle()
+class GroupHideTool(ToolToggleBase):
+    """Show lines with a given gid."""
+    default_keymap = 'S'
+    description = 'Show by gid'
+    default_toggled = True
+
+    def __init__(self, *args, gid, **kwargs):
+        self.gid = gid
+        super().__init__(*args, **kwargs)
+
+    def enable(self, *args):
+        self.set_lines_visibility(True)
+
+    def disable(self, *args):
+        self.set_lines_visibility(False)
+
+    def set_lines_visibility(self, state):
+        for ax in self.figure.get_axes():
+            for line in ax.get_lines():
+                if line.get_gid() == self.gid:
+                    line.set_visible(state)
+        self.figure.canvas.draw()
 
 
-# register the update function with each slider
-freq_slider.on_changed(update)
-amp_slider.on_changed(update)
+fig = plt.figure()
+plt.plot([1, 2, 3], gid='mygroup')
+plt.plot([2, 3, 4], gid='unknown')
+plt.plot([3, 2, 1], gid='mygroup')
 
-# Create a `matplotlib.widgets.Button` to reset the sliders to initial values.
-resetax = fig.add_axes([0.8, 0.025, 0.1, 0.04])
-button = Button(resetax, 'Reset', hovercolor='0.975')
+# Add the custom tools that we created
+fig.canvas.manager.toolmanager.add_tool('List', ListTools)
+fig.canvas.manager.toolmanager.add_tool('Show', GroupHideTool, gid='mygroup')
 
+# Add an existing tool to new group `foo`.
+# It can be added as many times as we want
+# fig.canvas.manager.toolbar.add_tool('zoom', 'foo')
 
-def reset(event):
-    freq_slider.reset()
-    amp_slider.reset()
-button.on_clicked(reset)
+# Remove the forward button
+# fig.canvas.manager.toolmanager.remove_tool('forward')
+
+# To add a custom tool to the toolbar at specific location inside
+# the navigation group
+# fig.canvas.manager.toolbar.add_tool('Show', 'navigation', 1)
 
 plt.show()
-freq_slider.set_val(20)
-fig.canvas.draw_idle()

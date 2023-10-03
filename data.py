@@ -1,4 +1,5 @@
 from helpers import channel2_wave_lengths, channel1_wave_lengths
+import random
 
 
 def read_file(filename):
