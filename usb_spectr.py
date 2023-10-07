@@ -38,6 +38,9 @@ product_id = 0x1002
 # data = device.read(endpoint.bEndpointAddress, endpoint.wMaxPacketSize)
 # print("Data read:", data)
 
+def lookup_device():
+    return usb.core.find(idVendor=vendor_id, idProduct=product_id)
+
 def init_usb():
     device = usb.core.find(idVendor=vendor_id, idProduct=product_id)
     device.set_configuration()

@@ -3,7 +3,7 @@ from helpers import channel1_wave_lengths, channel2_wave_lengths
 from influx import write_to_influx
 # from plot import draw_plot, redraw_plot, add_frame, interactive_off, interactive_on
 from plot import SpectrPlot
-from usb_spectr import get_data, parse_data, init_usb
+from usb_spectr import get_data, parse_data, init_usb, lookup_device
 import time
 import datetime
 import asyncio
@@ -13,20 +13,24 @@ import random
 global_data = {
     "data_frames": [],
     "started": False,
-    "first_draw": True
+    "first_draw": True,
+    "terminated": False,
+    "device": None,
+    "address": None,
+    "packet_size": None
 }
 
 plot = SpectrPlot(global_data)
 ioloop = asyncio.get_event_loop()
 
-
-class TaskRunner():
+class TaskRunner:
     def __init__(self):
         self.running_tasks = []
 
     def stop_tasks(self):
         for task in self.running_tasks:
             task.cancel()
+        self.running_tasks = []
 
     def start_task(self, task):
         self.running_tasks.append(asyncio.ensure_future(task()))
@@ -37,10 +41,15 @@ runner = TaskRunner()
 
 async def receive_data():
     start = time.time()
-    device, address, packet_size = init_usb()
+    if global_data['device'] is None:
+        device, address, packet_size = init_usb()
+        global_data['device'] = device
+        global_data['address'] = address
+        global_data['packet_size'] = packet_size
+
     ind = 0
-    while True:
-        data = get_data(device, address, packet_size)
+    while global_data['started'] and not global_data['terminated']:
+        data = get_data(global_data['device'], global_data['address'], global_data['packet_size'])
         ct = time.time()
         delta = ct - start
         print(delta)
@@ -67,7 +76,7 @@ def get_random_channel_data():
 
 async def receive_mocked_data():
     ind = 0
-    while global_data['started'] == True:
+    while global_data['started'] and not global_data['terminated']:
         print('receive_mocked_data')
         ch1 = get_random_channel_data()
         ch2 = get_random_channel_data()
@@ -87,51 +96,58 @@ async def receive_mocked_data():
 
 
 async def redraw():
-    data_frame = global_data['data_frames'][-1]
     if global_data['first_draw']:
+        data_frame = global_data['data_frames'][-1]
         plot.draw_plot((channel1_wave_lengths, data_frame["values_ch1"]),(channel2_wave_lengths, data_frame["values_ch2"]))
         global_data['first_draw'] = False
 
-    while global_data['started']:
+    while global_data['started'] and not global_data['terminated']:
         await plot.redraw_plot()
 
 
 async def wait_for_action():
-    while not global_data['started']:
+    while not global_data['started'] and not global_data['terminated']:
         plot.wait_for_action()
+        await asyncio.sleep(0)
+
+
+async def looking_for_device():
+    device = lookup_device()
+    while device is None:
+        print('Not Found')
+        await asyncio.sleep(1)
+        device = lookup_device()
+
+    print('Found')
+    plot.device_text.set_text('')
+    plot.btn_start.set_active(True)
 
 
 def on_start():
     global_data['started'] = True
-    runner.stop_tasks()
-    runner.start_task(receive_mocked_data)
-    runner.start_task(redraw)
 
 
 def on_stop():
     global_data['started'] = False
-    runner.stop_tasks()
-    runner.start_task(wait_for_action)
 
 
-def on_close(e):
-    runner.stop_tasks()
-    exit(0)
+def on_close():
+    global_data['terminated'] = True
 
 
-if __name__ == '__main__':
+async def main():
     plot.register_start(on_start)
     plot.register_stop(on_stop)
     plot.register_close(on_close)
     plot.show()
-    runner.start_task(wait_for_action)
-    # asyncio.ensure_future(redraw(plot))
-
-    ioloop.run_forever()
-
-
+    await asyncio.gather(wait_for_action(), looking_for_device())
+    while not global_data['terminated']:
+        await asyncio.gather(receive_data(), redraw())
+        await wait_for_action()
 
 
+if __name__ == '__main__':
+    asyncio.run(main())
 
 
 

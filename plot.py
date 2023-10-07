@@ -18,7 +18,7 @@ class SpectrPlot():
         plt.ion()
         fig, ax = plt.subplots()
         fig.canvas.manager.set_window_title('Спектр')
-        ax.set_position([0.05, 0.07, 0.85, 0.9])
+        ax.set_position([0.05, 0.1, 0.85, 0.87])
         ax_slider = fig.add_axes([0.05, 0.01, 0.65, 0.03])
         ax_expo_slider = fig.add_axes([0.93, 0.15, 0.03, 0.65])
         slider = Slider(
@@ -44,6 +44,7 @@ class SpectrPlot():
         btn_start = Button(ax_start, 'Старт')
         btn_stop = Button(ax_stop, 'Стоп')
         btn_stop.set_active(False)
+        btn_start.set_active(False)
         self.prev_ymin = 0
         self.prev_ymax = 100
         ax.set_ylim([self.prev_ymin, self.prev_ymax])
@@ -59,6 +60,25 @@ class SpectrPlot():
         self.line_ch1 = None
         self.line_ch2 = None
         self.exp_val = 0
+        self.device_text = ax.text(0.3, 60, 'Прилад не підключений')
+        fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+
+    def on_key_press(self, e):
+        if self.data['started'] or self.data['terminated'] or not self.slider.get_active() or not self.expo_slider.get_active():
+            return
+        if e.key == 'left':
+            if self.slider.val != self.slider.valmin:
+                self.slider.set_val(self.slider.val - 1)
+        elif e.key == 'right':
+            if self.slider.val != self.slider.valmax:
+                self.slider.set_val(self.slider.val + 1)
+        elif e.key == 'up':
+            if self.expo_slider.val != self.expo_slider.valmax:
+                self.expo_slider.set_val(self.expo_slider.val + 1)
+        elif e.key == 'down':
+            if self.expo_slider.val != self.expo_slider.valmin:
+                self.expo_slider.set_val(self.expo_slider.val - 1)
+
 
     def draw_plot(self, ch1, ch2):
         print('draw_plot')
@@ -83,6 +103,15 @@ class SpectrPlot():
             self.prev_ymax = ymax
             self.ax.set_ylim([ymin - offset, ymax + offset])
 
+    def handle_legend(self):
+        current_frame = self.slider.val + 1
+        self.line_ch1.set_label('Кадр ' + str(current_frame))
+        self.line_ch2.set_label('')
+        if self.exp_val != 0:
+            from_val = current_frame - self.exp_val
+            self.line_ch2.set_label('Експозиція з ' + str(from_val) + ' до ' + str(current_frame))
+        self.ax.legend()
+
     async def redraw_plot(self):
         print('redraw_plot')
         data_frame = self.data['data_frames'][-1]
@@ -96,6 +125,7 @@ class SpectrPlot():
         self.slider.set_val(ind)
         self.slider.valtext.set_text(data_frame["time"])
         self.scale_if_needed(ch1, ch2)
+        self.handle_legend()
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
         await asyncio.sleep(0)
@@ -105,19 +135,24 @@ class SpectrPlot():
             self.btn_start.set_active(False)
             self.btn_stop.set_active(True)
             self.slider.disconnect(self.on_update_id)
+            self.expo_slider.disconnect(self.on_update_expo_slider_id)
             self.expo_slider.set_active(False)
             self.expo_slider.set_val(0)
             on_start()
         self.btn_start.on_clicked(handle)
 
     def register_close(self, on_close):
-        self.fig.canvas.mpl_connect('close_event', on_close)
+        def handler(e):
+            plt.close('all')
+            on_close()
+        self.fig.canvas.mpl_connect('close_event', handler)
 
     def register_stop(self, on_stop):
         def handle(val):
             self.btn_start.set_active(True)
             self.btn_stop.set_active(False)
             self.on_update_id = self.slider.on_changed(self.on_update_slider)
+            self.on_update_expo_slider_id = self.expo_slider.on_changed(self.on_update_expo)
             self.adjust_exp_slider()
             on_stop()
         self.btn_stop.on_clicked(handle)
@@ -130,15 +165,18 @@ class SpectrPlot():
         self.fig.canvas.flush_events()
 
     def on_update_slider(self, val):
-        print("on change " + str(val))
-        ch1, ch2, time_val = self.get_frame_data()
-        self.slider.valtext.set_text(time_val)
-        self.line_ch1.set_ydata(ch1)
-        self.line_ch2.set_ydata(ch2)
-        self.scale_if_needed(ch1, ch2)
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-
+        try:
+            print("on change " + str(val))
+            ch1, ch2, time_val = self.get_frame_data()
+            self.slider.valtext.set_text(time_val)
+            self.line_ch1.set_ydata(ch1)
+            self.line_ch2.set_ydata(ch2)
+            self.scale_if_needed(ch1, ch2)
+            self.handle_legend()
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+        except:
+            print('on time update error')
     def adjust_exp_slider(self):
         frames_number = len(self.data['data_frames'])
         if frames_number < MAX_EXPO:
@@ -164,19 +202,22 @@ class SpectrPlot():
         return ch1_sum_values.tolist(), ch2_sum_values.tolist(), time_val
 
     def on_update_expo(self, val):
-        self.exp_val = val
-        self.expo_slider.valtext.set_text('{} мс'.format(val * 3 + 3))
-        ch1, ch2, time_val = self.get_frame_data()
-        self.line_ch1.set_ydata(ch1)
-        self.line_ch2.set_ydata(ch2)
-        self.scale_if_needed(ch1, ch2)
-        #change step and min value of time slider
+        try:
+            self.exp_val = val
+            self.expo_slider.valtext.set_text('{} мс'.format(val * 3 + 3))
+            ch1, ch2, time_val = self.get_frame_data()
+            self.line_ch1.set_ydata(ch1)
+            self.line_ch2.set_ydata(ch2)
+            self.scale_if_needed(ch1, ch2)
 
-        self.slider.valmin = 0 if self.exp_val == 0 else self.slider.valmax % self.exp_val
-        self.slider.ax.set_xlim(self.slider.valmin, self.slider.valmax)
-        self.slider.valtext.set_text(time_val)
+            self.slider.valmin = 0 if self.exp_val == 0 else self.slider.valmax % self.exp_val
+            self.slider.ax.set_xlim(self.slider.valmin, self.slider.valmax)
+            self.slider.valtext.set_text(time_val)
+            self.handle_legend()
 
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+        except:
+            print('on expo update error')
 
 
