@@ -11,7 +11,7 @@ import numpy as np
 from helpers import channel2_wave_lengths
 
 # plt.style.use('_mpl-gallery')
-
+MAX_EXPO = 33
 
 class SpectrPlot():
     def __init__(self, data):
@@ -33,7 +33,7 @@ class SpectrPlot():
             label='Експозиція',
             valmin=0,
             valstep=1,
-            valmax=20,
+            valmax=MAX_EXPO,
             orientation='vertical'
         )
         slider.valtext.set_text('')
@@ -141,7 +141,7 @@ class SpectrPlot():
 
     def adjust_exp_slider(self):
         frames_number = len(self.data['data_frames'])
-        if frames_number < 20:
+        if frames_number < MAX_EXPO:
             return
         self.expo_slider.set_val(0)
         self.expo_slider.set_active(True)
