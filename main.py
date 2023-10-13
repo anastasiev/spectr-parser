@@ -74,7 +74,7 @@ def get_random_channel_data():
     return [random.randint(150, 300) for _ in range(1824)]
 
 
-async def receive_mocked_data():
+async def receive_data_mocked():
     ind = 0
     while global_data['started'] and not global_data['terminated']:
         print('receive_mocked_data')
@@ -123,6 +123,12 @@ async def looking_for_device():
     plot.btn_start.set_active(True)
 
 
+async def looking_for_device_mocked():
+    print('Found')
+    plot.device_text.set_text('')
+    plot.btn_start.set_active(True)
+
+
 def on_start():
     global_data['started'] = True
 
@@ -140,9 +146,9 @@ async def main():
     plot.register_stop(on_stop)
     plot.register_close(on_close)
     plot.show()
-    await asyncio.gather(wait_for_action(), looking_for_device())
+    await asyncio.gather(wait_for_action(), looking_for_device_mocked())
     while not global_data['terminated']:
-        await asyncio.gather(receive_data(), redraw())
+        await asyncio.gather(receive_data_mocked(), redraw())
         await wait_for_action()
 
 

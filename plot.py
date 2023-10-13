@@ -2,15 +2,11 @@ import time
 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
-import mplcursors
 import datetime
 import asyncio
 
 import numpy as np
 
-from helpers import channel2_wave_lengths
-
-# plt.style.use('_mpl-gallery')
 MAX_EXPO = 33
 
 class SpectrPlot():
@@ -20,7 +16,7 @@ class SpectrPlot():
         fig.canvas.manager.set_window_title('Спектр')
         ax.set_position([0.05, 0.1, 0.85, 0.87])
         ax_slider = fig.add_axes([0.05, 0.01, 0.65, 0.03])
-        ax_expo_slider = fig.add_axes([0.93, 0.15, 0.03, 0.65])
+        ax_expo_slider = fig.add_axes([0.93, 0.15, 0.03, 0.55])
         slider = Slider(
             ax=ax_slider,
             label='Час',
@@ -39,12 +35,21 @@ class SpectrPlot():
         slider.valtext.set_text('')
         expo_slider.valtext.set_text('3 мс')
         expo_slider.set_active(False)
-        ax_start = fig.add_axes([0.9, 0.01, 0.04, 0.03])
-        ax_stop = fig.add_axes([0.95, 0.01, 0.04, 0.03])
+        ax_start = fig.add_axes([0.92, 0.06, 0.07, 0.04])
+        ax_stop = fig.add_axes([0.92, 0.01, 0.07, 0.04])
         btn_start = Button(ax_start, 'Старт')
         btn_stop = Button(ax_stop, 'Стоп')
         btn_stop.set_active(False)
         btn_start.set_active(False)
+        ax_save = fig.add_axes([0.91, 0.9, 0.07, 0.04])
+        ax_load = fig.add_axes([0.91, 0.82, 0.07, 0.04])
+        btn_save = Button(ax_save, 'Зберегти')
+        btn_save.set_active(False)
+        btn_load = Button(ax_load, 'Відкрити')
+        self.btn_save = btn_save
+        self.btn_load = btn_load
+        self.btn_save.on_clicked(self.on_save_btn)
+        self.btn_load.on_clicked(self.on_load_btn)
         self.prev_ymin = 0
         self.prev_ymax = 100
         ax.set_ylim([self.prev_ymin, self.prev_ymax])
@@ -62,6 +67,40 @@ class SpectrPlot():
         self.exp_val = 0
         self.device_text = ax.text(0.3, 60, 'Прилад не підключений')
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        annot = ax.annotate("", xy=(0, 0), xytext=(10, 10), textcoords="offset points",
+                            bbox=dict(boxstyle="round", fc="w"))
+        annot.set_visible(False)
+        self.annot = annot
+        self.scatter = None
+        self.hover_event_id = None
+
+    def update_annot(self, ind):
+        pos = self.scatter.get_offsets()[ind["ind"][0]]
+        self.annot.xy = pos
+        x = pos[0]
+        y = pos[1]
+        text = "д={}, і={}".format(x, int(y))
+        self.annot.set_text(text)
+        self.annot.get_bbox_patch().set_alpha(0.4)
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+    def update_scatter_data(self):
+        if self.scatter is not None:
+            ch1_x = self.line_ch1.get_xdata()
+            ch1_y = np.array(self.line_ch1.get_ydata())
+            ch2_x = self.line_ch2.get_xdata()
+            ch2_y = np.array(self.line_ch2.get_ydata())
+            x = np.concatenate((ch1_x, ch2_x), axis=None).reshape((len(ch1_x)*2, 1))
+            y = np.concatenate((ch1_y, ch2_y), axis=None).reshape((len(ch1_y)*2, 1))
+            offsets = np.concatenate((x, y), axis=1)
+            self.scatter.set_offsets(offsets)
+
+    def on_save_btn(self, _):
+        pass
+
+    def on_load_btn(self, _):
+        pass
 
     def on_key_press(self, e):
         if self.data['started'] or self.data['terminated'] or not self.slider.get_active() or not self.expo_slider.get_active():
@@ -119,6 +158,7 @@ class SpectrPlot():
         ch2 = data_frame["values_ch2"]
         self.line_ch1.set_ydata(ch1)
         self.line_ch2.set_ydata(ch2)
+        self.update_scatter_data()
         ind = len(self.data['data_frames']) - 1
         self.slider.valmax = ind
         self.slider.ax.set_xlim(self.slider.valmin, self.slider.valmax)
@@ -138,6 +178,9 @@ class SpectrPlot():
             self.expo_slider.disconnect(self.on_update_expo_slider_id)
             self.expo_slider.set_active(False)
             self.expo_slider.set_val(0)
+            self.btn_save.set_active(False)
+            self.btn_load.set_active(False)
+            self.hide_scatter()
             on_start()
         self.btn_start.on_clicked(handle)
 
@@ -151,11 +194,49 @@ class SpectrPlot():
         def handle(val):
             self.btn_start.set_active(True)
             self.btn_stop.set_active(False)
+            self.btn_save.set_active(True)
+            self.btn_load.set_active(True)
             self.on_update_id = self.slider.on_changed(self.on_update_slider)
             self.on_update_expo_slider_id = self.expo_slider.on_changed(self.on_update_expo)
+            self.show_scatter()
             self.adjust_exp_slider()
             on_stop()
+
         self.btn_stop.on_clicked(handle)
+
+    def show_scatter(self):
+        if self.scatter is None:
+            self.scatter = self.ax.scatter(
+                np.concatenate((self.line_ch1.get_xdata(), self.line_ch2.get_xdata()), axis=None),
+                self.line_ch1.get_ydata() + self.line_ch2.get_ydata(),
+                c='red', s=8
+            )
+        else:
+            self.scatter.set_visible(True)
+        self.hover_event_id = self.fig.canvas.mpl_connect("motion_notify_event", self.on_hover)
+
+    def hide_scatter(self):
+        if self.scatter is not None:
+            self.scatter.set_visible(False)
+            self.fig.canvas.mpl_disconnect(self.hover_event_id)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+
+
+    def on_hover(self, event):
+        vis = self.annot.get_visible()
+        if event.inaxes == self.ax:
+            cont, ind = self.scatter.contains(event)
+            if cont:
+                self.update_annot(ind)
+                self.annot.set_visible(True)
+                self.fig.canvas.draw()
+                self.fig.canvas.flush_events()
+            else:
+                if vis:
+                    self.annot.set_visible(False)
+                    self.fig.canvas.draw()
+                    self.fig.canvas.flush_events()
 
     def show(self):
         plt.show()
@@ -171,6 +252,7 @@ class SpectrPlot():
             self.slider.valtext.set_text(time_val)
             self.line_ch1.set_ydata(ch1)
             self.line_ch2.set_ydata(ch2)
+            self.update_scatter_data()
             self.scale_if_needed(ch1, ch2)
             self.handle_legend()
             self.fig.canvas.draw()
@@ -208,6 +290,7 @@ class SpectrPlot():
             ch1, ch2, time_val = self.get_frame_data()
             self.line_ch1.set_ydata(ch1)
             self.line_ch2.set_ydata(ch2)
+            self.update_scatter_data()
             self.scale_if_needed(ch1, ch2)
 
             self.slider.valmin = 0 if self.exp_val == 0 else self.slider.valmax % self.exp_val
