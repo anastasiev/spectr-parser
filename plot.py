@@ -1,5 +1,6 @@
 import time
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 import datetime
@@ -78,6 +79,8 @@ class SpectrPlot():
         self.annot = annot
         self.scatter = None
         self.hover_event_id = None
+        mpl.rcParams['keymap.back'].remove('left')
+        mpl.rcParams['keymap.forward'].remove('right')
 
     def update_annot(self, ind):
         pos = self.scatter.get_offsets()[ind["ind"][0]]
@@ -142,6 +145,7 @@ class SpectrPlot():
         self.slider.set_active(True)
         self.adjust_exp_slider()
         self.handle_legend()
+        self.device_text.set_text('')
 
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
