@@ -1,28 +1,23 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import mplcursors
+import usb.core
+# import usb.backend.libusb0
 
-fig, axes = plt.subplots(ncols=2)
+vendor_id = 0x10c4
+product_id = 0x8105
+try:
+    # backend = usb.backend.libusb0.get_backend()
+    dev = usb.core.find(idVendor=vendor_id, idProduct=product_id)
 
-left_artist = axes[0].plot(range(11))
-axes[0].set(title="No box, different position", aspect=1)
+    print(dev)
 
-right_artist = axes[1].imshow(np.arange(100).reshape(10, 10))
-axes[1].set(title="Fancy white background")
+    print('setting configuration...')
 
-# Make the text pop up "underneath" the line and remove the box...
-c1 = mplcursors.cursor(left_artist)
-@c1.connect("add")
-def _(sel):
-    sel.annotation.set(position=(15, -15))
-    # Note: Needs to be set separately due to matplotlib/matplotlib#8956.
-    sel.annotation.set_bbox(None)
+    try:
+        dev.set_configuration()
+        print('completed!')
+    except Exception as e:
+        print(str(e))
 
-# Make the box have a white background with a fancier connecting arrow
-c2 = mplcursors.cursor(right_artist)
-@c2.connect("add")
-def _(sel):
-    sel.annotation.get_bbox_patch().set(fc="white")
-    sel.annotation.arrow_patch.set(arrowstyle="simple", fc="white", alpha=.5)
-
-plt.show()
+    input("Press Enter to continue...")
+except Exception as e:
+    print(str(e))
+    input("Error...")

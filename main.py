@@ -1,7 +1,4 @@
-from data import get_channel_values
 from helpers import channel1_wave_lengths, channel2_wave_lengths
-from influx import write_to_influx
-# from plot import draw_plot, redraw_plot, add_frame, interactive_off, interactive_on
 from plot import SpectrPlot
 from usb_spectr import get_data, parse_data, init_usb, lookup_device
 import time
@@ -41,11 +38,14 @@ runner = TaskRunner()
 
 async def receive_data():
     start = time.time()
-    if global_data['device'] is None:
-        device, address, packet_size = init_usb()
-        global_data['device'] = device
-        global_data['address'] = address
-        global_data['packet_size'] = packet_size
+    while global_data['device'] is None:
+        try:
+            device, address, packet_size = init_usb()
+            global_data['device'] = device
+            global_data['address'] = address
+            global_data['packet_size'] = packet_size
+        except Exception as e:
+            print(str(e))
 
     ind = 0
     while global_data['started'] and not global_data['terminated']:
@@ -113,7 +113,7 @@ async def wait_for_action():
 
 async def looking_for_device():
     device = lookup_device()
-    while device is None:
+    while device is None and not global_data['terminated']:
         print('Not Found')
         await asyncio.sleep(1)
         device = lookup_device()
@@ -146,14 +146,15 @@ async def main():
     plot.register_stop(on_stop)
     plot.register_close(on_close)
     plot.show()
-    await asyncio.gather(wait_for_action(), looking_for_device_mocked())
+    await asyncio.gather(wait_for_action(), looking_for_device())
     while not global_data['terminated']:
-        await asyncio.gather(receive_data_mocked(), redraw())
+        await asyncio.gather(receive_data(), redraw())
         await wait_for_action()
 
 
 if __name__ == '__main__':
     asyncio.run(main())
+
 
 
 

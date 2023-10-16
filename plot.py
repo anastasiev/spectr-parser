@@ -4,10 +4,15 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 import datetime
 import asyncio
+import easygui
+import pickle
 
 import numpy as np
 
+from helpers import channel1_wave_lengths, channel2_wave_lengths
+
 MAX_EXPO = 33
+SPECTR_EXT = 'spectr'
 
 class SpectrPlot():
     def __init__(self, data):
@@ -97,10 +102,49 @@ class SpectrPlot():
             self.scatter.set_offsets(offsets)
 
     def on_save_btn(self, _):
-        pass
+        if self.data['data_frames'] is not None:
+            file_to_save = easygui.filesavebox(filetypes=['\\*.{}'.format(SPECTR_EXT)])
+            if file_to_save is None:
+                return
+            file_to_save = '{}.{}'.format(file_to_save, SPECTR_EXT)
+            f = open(file_to_save, 'wb')
+            pickle.dump(self.data['data_frames'], f)
 
     def on_load_btn(self, _):
-        pass
+        file_name = easygui.fileopenbox(default="~\\*.{}".format(SPECTR_EXT))
+        if file_name is None:
+            return
+        data_frames = pickle.load(open(file_name, 'rb'))
+        self.data['data_frames'] = data_frames
+        data_frame = self.data['data_frames'][-1]
+        ch1_val = data_frame["values_ch1"]
+        ch2_val = data_frame["values_ch2"]
+        if self.line_ch1 is None and self.line_ch2 is None:
+            self.draw_plot((channel1_wave_lengths, ch1_val), (channel2_wave_lengths, ch2_val))
+            self.line_ch1.set_ydata(ch1_val)
+            self.line_ch2.set_ydata(ch1_val)
+            self.show_scatter()
+            self.data['first_draw'] = False
+
+        self.line_ch1.set_ydata(ch1_val)
+        self.line_ch2.set_ydata(ch1_val)
+
+        ind = len(data_frames) - 1
+        self.slider.valmax = ind
+        self.slider.ax.set_xlim(self.slider.valmin, self.slider.valmax)
+        self.slider.set_val(ind)
+        self.slider.valtext.set_text(data_frame["time"])
+
+        self.scale_if_needed(ch1_val, ch2_val)
+
+        self.btn_save.set_active(True)
+        self.btn_load.set_active(True)
+        self.slider.set_active(True)
+        self.adjust_exp_slider()
+        self.handle_legend()
+
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
     def on_key_press(self, e):
         if self.data['started'] or self.data['terminated'] or not self.slider.get_active() or not self.expo_slider.get_active():
@@ -117,7 +161,6 @@ class SpectrPlot():
         elif e.key == 'down':
             if self.expo_slider.val != self.expo_slider.valmin:
                 self.expo_slider.set_val(self.expo_slider.val - 1)
-
 
     def draw_plot(self, ch1, ch2):
         print('draw_plot')
@@ -174,6 +217,7 @@ class SpectrPlot():
         def handle(val):
             self.btn_start.set_active(False)
             self.btn_stop.set_active(True)
+            self.slider.set_active(False)
             self.slider.disconnect(self.on_update_id)
             self.expo_slider.disconnect(self.on_update_expo_slider_id)
             self.expo_slider.set_active(False)
@@ -196,6 +240,7 @@ class SpectrPlot():
             self.btn_stop.set_active(False)
             self.btn_save.set_active(True)
             self.btn_load.set_active(True)
+            self.slider.set_active(True)
             self.on_update_id = self.slider.on_changed(self.on_update_slider)
             self.on_update_expo_slider_id = self.expo_slider.on_changed(self.on_update_expo)
             self.show_scatter()
@@ -221,7 +266,6 @@ class SpectrPlot():
             self.fig.canvas.mpl_disconnect(self.hover_event_id)
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
-
 
     def on_hover(self, event):
         vis = self.annot.get_visible()
@@ -259,6 +303,7 @@ class SpectrPlot():
             self.fig.canvas.flush_events()
         except:
             print('on time update error')
+
     def adjust_exp_slider(self):
         frames_number = len(self.data['data_frames'])
         if frames_number < MAX_EXPO:

@@ -5,41 +5,19 @@ import usb.util
 import usb.backend.libusb1
 import time
 
-# backend = usb.backend.libusb1.get_backend(find_library=lambda x: "C:\\Users\\VladWin\\PycharmProjects\\spectr-parser\\venv\\Lib\\site-packages\\libusb\\_platform\_windows\\x64\\libusb-1.0.dll")
+# backend = usb.backend.libusb1.get_backend(find_library=lambda x: "libusb-1.0.dll")
 # usb_devices = usb.core.find(backend=backend, find_all=True)
-
-
 
 vendor_id = 0x0547
 product_id = 0x1002
 
-#
-# for cfg in device:
-#     sys.stdout.write(str(cfg.bConfigurationValue) + '\n')
-#     for intf in cfg:
-#         sys.stdout.write('\t' + \
-#                          str(intf.bInterfaceNumber) + \
-#                          ',' + \
-#                          str(intf.bAlternateSetting) + \
-#                          '\n')
-#         for ep in intf:
-#             sys.stdout.write('\t\t' + \
-#                              str(ep.bEndpointAddress) + \
-#                              '\n')
-
-
-# Define the endpoint
-
-# device.ctrl_transfer(0x40, 201, 0, 0, None)
-# device.ctrl_transfer(0x40, 193, 0, 0, None)
-# device.ctrl_transfer(0x40, 194, 1, 0, None)
-# device.ctrl_transfer(0x40, 195, 0, 0, None)
-# device.ctrl_transfer(0x40, 197, 1, 0, None)
-# data = device.read(endpoint.bEndpointAddress, endpoint.wMaxPacketSize)
-# print("Data read:", data)
 
 def lookup_device():
-    return usb.core.find(idVendor=vendor_id, idProduct=product_id)
+    try:
+        return usb.core.find(idVendor=vendor_id, idProduct=product_id)
+    except Exception as e:
+        print('lookup device error: ' + str(e))
+        return None
 
 def init_usb():
     device = usb.core.find(idVendor=vendor_id, idProduct=product_id)
