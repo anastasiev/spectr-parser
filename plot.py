@@ -7,6 +7,7 @@ import datetime
 import asyncio
 import easygui
 import pickle
+import xlsxwriter
 
 import numpy as np
 
@@ -22,7 +23,7 @@ class SpectrPlot():
         fig.canvas.manager.set_window_title('Спектр')
         ax.set_position([0.05, 0.1, 0.85, 0.87])
         ax_slider = fig.add_axes([0.05, 0.01, 0.65, 0.03])
-        ax_expo_slider = fig.add_axes([0.93, 0.15, 0.03, 0.55])
+        ax_expo_slider = fig.add_axes([0.93, 0.15, 0.03, 0.35])
         slider = Slider(
             ax=ax_slider,
             label='Час',
@@ -39,7 +40,7 @@ class SpectrPlot():
             orientation='vertical'
         )
         slider.valtext.set_text('')
-        expo_slider.valtext.set_text('3 мс')
+        expo_slider.valtext.set_text('18 мс')
         expo_slider.set_active(False)
         ax_start = fig.add_axes([0.92, 0.06, 0.07, 0.04])
         ax_stop = fig.add_axes([0.92, 0.01, 0.07, 0.04])
@@ -81,6 +82,37 @@ class SpectrPlot():
         self.hover_event_id = None
         mpl.rcParams['keymap.back'].remove('left')
         mpl.rcParams['keymap.forward'].remove('right')
+        ax_export_all = fig.add_axes([0.91, 0.74, 0.07, 0.04])
+        ax_export_current = fig.add_axes([0.91, 0.66, 0.07, 0.06])
+        btn_export_all = Button(ax_export_all, 'Експорт')
+        btn_export_current = Button(ax_export_current, 'Експорт\nПоточний')
+        ax_scatter_switch = fig.add_axes([0.91, 0.58, 0.07, 0.06])
+        self.switch_state = True
+        scatter_visibility_switch = Button(ax_scatter_switch, 'Сховати\nТочки')
+
+        scatter_visibility_switch.on_clicked(self.on_scatter_visibility_on_click)
+        self.scatter_visibility_switch = scatter_visibility_switch
+        self.btn_export_all = btn_export_all
+        self.btn_export_current = btn_export_current
+        self.btn_export_all.set_active(False)
+        self.btn_export_current.set_active(False)
+        self.btn_export_all.on_clicked(self.on_export_all_btn)
+        self.btn_export_current.on_clicked(self.on_export_current_btn)
+
+    def on_scatter_visibility_on_click(self, _):
+        if self.scatter is None:
+            return
+
+        if self.switch_state:
+            self.scatter_visibility_switch.label.set_text('Показати\nТочки')
+            self.switch_state = False
+            self.hide_scatter()
+        else:
+            self.scatter_visibility_switch.label.set_text('Сховати\nТочки')
+            self.switch_state = True
+            self.show_scatter()
+
+
 
     def update_annot(self, ind):
         pos = self.scatter.get_offsets()[ind["ind"][0]]
@@ -143,12 +175,76 @@ class SpectrPlot():
         self.btn_save.set_active(True)
         self.btn_load.set_active(True)
         self.slider.set_active(True)
+        self.btn_export_all.set_active(True)
+        self.btn_export_current.set_active(True)
         self.adjust_exp_slider()
         self.handle_legend()
         self.device_text.set_text('')
 
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
+    def on_export_all_btn(self, _):
+        workbook = xlsxwriter.Workbook('hello.xlsx')
+        worksheet = workbook.add_worksheet()
+        cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
+
+        for cell, wave in enumerate(channel1_wave_lengths, start=1):
+            worksheet.write(cell, 0, wave, cell_format)
+
+        start_cell = len(channel1_wave_lengths) + 1
+        for cell, wave in enumerate(channel2_wave_lengths, start=start_cell):
+            worksheet.write(cell, 0, wave, cell_format)
+
+        data_frames = self.data['data_frames']
+        for frame_count, frames in enumerate(data_frames, start=1):
+            ch1_values = frames["values_ch1"]
+            ch2_values = frames["values_ch2"]
+            frame_time = frames["time"]
+
+            worksheet.write(0, frame_count, 'Час {}\nКадр {}'.format(frame_time, frame_count), cell_format)
+
+            for cell, val in enumerate(ch1_values, start=1):
+                worksheet.write(cell, frame_count, val)
+
+            for cell, val in enumerate(ch2_values, start=start_cell):
+                worksheet.write(cell, frame_count, val)
+
+        worksheet.set_column(1, len(data_frames), 30)
+        worksheet.set_row(0, 45)
+        workbook.close()
+
+    def on_export_current_btn(self, _):
+        workbook = xlsxwriter.Workbook('current.xlsx')
+        worksheet = workbook.add_worksheet()
+        cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
+
+        for cell, wave in enumerate(channel1_wave_lengths, start=1):
+            worksheet.write(cell, 0, wave, cell_format)
+
+        start_cell = len(channel1_wave_lengths) + 1
+        for cell, wave in enumerate(channel2_wave_lengths, start=start_cell):
+            worksheet.write(cell, 0, wave, cell_format)
+
+        ch1_values = self.line_ch1.get_ydata()
+        ch2_values = self.line_ch2.get_ydata()
+
+        frame_number_str = self.line_ch1.get_label()
+        expo_str = self.line_ch2.get_label()
+
+        header_str = frame_number_str if expo_str == '' else '{}\n{}'.format(frame_number_str,expo_str)
+
+        worksheet.write(0, 1, header_str, cell_format)
+
+        for cell, val in enumerate(ch1_values, start=1):
+            worksheet.write(cell, 1, val)
+
+        for cell, val in enumerate(ch2_values, start=start_cell):
+            worksheet.write(cell, 1, val)
+
+        worksheet.set_column(1, 1, 20)
+        worksheet.set_row(0, 45)
+        workbook.close()
 
     def on_key_press(self, e):
         if self.data['started'] or self.data['terminated'] or not self.slider.get_active() or not self.expo_slider.get_active():
@@ -228,6 +324,8 @@ class SpectrPlot():
             self.expo_slider.set_val(0)
             self.btn_save.set_active(False)
             self.btn_load.set_active(False)
+            self.btn_export_all.set_active(False)
+            self.btn_export_current.set_active(False)
             self.hide_scatter()
             on_start()
         self.btn_start.on_clicked(handle)
@@ -245,6 +343,8 @@ class SpectrPlot():
             self.btn_save.set_active(True)
             self.btn_load.set_active(True)
             self.slider.set_active(True)
+            self.btn_export_all.set_active(True)
+            self.btn_export_current.set_active(True)
             self.on_update_id = self.slider.on_changed(self.on_update_slider)
             self.on_update_expo_slider_id = self.expo_slider.on_changed(self.on_update_expo)
             self.show_scatter()
@@ -335,7 +435,7 @@ class SpectrPlot():
     def on_update_expo(self, val):
         try:
             self.exp_val = val
-            self.expo_slider.valtext.set_text('{} мс'.format(val * 3 + 3))
+            self.expo_slider.valtext.set_text('{} мс'.format(val * 18 + 18))
             ch1, ch2, time_val = self.get_frame_data()
             self.line_ch1.set_ydata(ch1)
             self.line_ch2.set_ydata(ch2)

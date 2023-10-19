@@ -146,9 +146,9 @@ async def main():
     plot.register_stop(on_stop)
     plot.register_close(on_close)
     plot.show()
-    await asyncio.gather(wait_for_action(), looking_for_device())
+    await asyncio.gather(wait_for_action(), looking_for_device_mocked())
     while not global_data['terminated']:
-        await asyncio.gather(receive_data(), redraw())
+        await asyncio.gather(receive_data_mocked(), redraw())
         await wait_for_action()
 
 

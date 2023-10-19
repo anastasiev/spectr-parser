@@ -1,23 +1,20 @@
-import usb.core
-# import usb.backend.libusb0
+import xlsxwriter
 
-vendor_id = 0x10c4
-product_id = 0x8105
-try:
-    # backend = usb.backend.libusb0.get_backend()
-    dev = usb.core.find(idVendor=vendor_id, idProduct=product_id)
+# Workbook() takes one, non-optional, argument
+# which is the filename that we want to create.
+workbook = xlsxwriter.Workbook('hello.xlsx')
 
-    print(dev)
+# The workbook object is then used to add new
+# worksheet via the add_worksheet() method.
+worksheet = workbook.add_worksheet()
 
-    print('setting configuration...')
+# Use the worksheet object to write
+# data via the write() method.
+worksheet.write(0,0, 'Hello..99')
+worksheet.write(0,1,'Geeks9')
+worksheet.write(0,2, 'For198')
+worksheet.write(0,3, 'Geeks134')
 
-    try:
-        dev.set_configuration()
-        print('completed!')
-    except Exception as e:
-        print(str(e))
-
-    input("Press Enter to continue...")
-except Exception as e:
-    print(str(e))
-    input("Error...")
+# Finally, close the Excel file
+# via the close() method.
+workbook.close()
