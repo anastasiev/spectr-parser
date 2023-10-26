@@ -13,8 +13,9 @@ import numpy as np
 
 from helpers import channel1_wave_lengths, channel2_wave_lengths
 
-MAX_EXPO = 33
+MAX_EXPO = 50
 SPECTR_EXT = 'spectr'
+EXCEL_EXT = 'xslx'
 
 class SpectrPlot():
     def __init__(self, data):
@@ -82,6 +83,7 @@ class SpectrPlot():
         self.hover_event_id = None
         mpl.rcParams['keymap.back'].remove('left')
         mpl.rcParams['keymap.forward'].remove('right')
+        fig.set_size_inches(16.5, 8.5)
         ax_export_all = fig.add_axes([0.91, 0.74, 0.07, 0.04])
         ax_export_current = fig.add_axes([0.91, 0.66, 0.07, 0.06])
         btn_export_all = Button(ax_export_all, 'Експорт')
@@ -185,7 +187,11 @@ class SpectrPlot():
         self.fig.canvas.flush_events()
 
     def on_export_all_btn(self, _):
-        workbook = xlsxwriter.Workbook('hello.xlsx')
+        file_to_save = easygui.filesavebox(filetypes=['\\*.{}'.format(EXCEL_EXT)])
+        if file_to_save is None:
+            return
+        file_to_save = '{}.{}'.format(file_to_save, EXCEL_EXT)
+        workbook = xlsxwriter.Workbook(file_to_save)
         worksheet = workbook.add_worksheet()
         cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
 
@@ -215,7 +221,11 @@ class SpectrPlot():
         workbook.close()
 
     def on_export_current_btn(self, _):
-        workbook = xlsxwriter.Workbook('current.xlsx')
+        file_to_save = easygui.filesavebox(filetypes=['\\*.{}'.format(EXCEL_EXT)])
+        if file_to_save is None:
+            return
+        file_to_save = '{}.{}'.format(file_to_save, EXCEL_EXT)
+        workbook = xlsxwriter.Workbook(file_to_save)
         worksheet = workbook.add_worksheet()
         cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
 
@@ -349,6 +359,7 @@ class SpectrPlot():
             self.on_update_expo_slider_id = self.expo_slider.on_changed(self.on_update_expo)
             self.show_scatter()
             self.adjust_exp_slider()
+            self.on_save_btn(None)
             on_stop()
 
         self.btn_stop.on_clicked(handle)
